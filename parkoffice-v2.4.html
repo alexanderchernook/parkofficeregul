@@ -189,7 +189,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection }
+import { getFirestore, doc, setDoc, getDoc as getDocOnce, onSnapshot, collection }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -210,20 +210,24 @@ const db   = getFirestore(app);
 // ═══════════════════════════════════
 // Места хранятся как объект: { "19": email|null, "62": email|null, ... }
 // Это исключает путаницу с индексами массива
-const SPOT_NUMBERS    = [19, 62, 63, 78, 91];
-const MAX_PER_WEEK    = 3;
-const MAX_WEEK_OFFSET = 1;
-const PRIORITY_WEEKS  = 4;
+const SPOT_NUMBERS   = [19, 62, 63, 78, 91];
+const MAX_PER_WEEK   = 3;
+const PRIORITY_WEEKS = 4;
+// Окно генерации: пятница 11:55–14:30 (случайное время между 12:00 и 14:30)
+const GEN_WIN_H = 11, GEN_WIN_M = 55; // откуда начинается окно генерации
+const RND_FROM  = 12 * 60;            // 12:00 в минутах от начала дня
+const RND_TO    = 14 * 60 + 30;       // 14:30
 
 // ═══════════════════════════════════
 //  СОСТОЯНИЕ
 // ═══════════════════════════════════
-let currentUser  = null;
-let weekOffset   = 0;
-let selectedDay  = null;
-let dbData       = {};
-let wlDaysWanted = 0;
-let unsubscribe  = null;
+let currentUser    = null;
+let weekOffset     = 0;
+let selectedDay    = null;
+let dbData         = {};
+let wlDaysWanted   = 0;
+let unsubscribe    = null;
+let nextWeekOpenTs = null;  // timestamp когда откроется следующая неделя (null = уже открыта)
 
 // ═══════════════════════════════════
 //  AUTH
@@ -259,10 +263,69 @@ onAuthStateChanged(auth, user => {
 //  FIRESTORE
 // ═══════════════════════════════════
 function subscribeToData() {
-  unsubscribe = onSnapshot(collection(db, 'bookings'), snap => {
+  // Слушаем брони
+  const unsubBookings = onSnapshot(collection(db, 'bookings'), snap => {
     dbData = {};
     snap.forEach(d => { dbData[d.id] = d.data(); });
     renderAll();
+  });
+  // Слушаем время открытия следующей недели
+  const unsubSettings = onSnapshot(doc(db, 'settings', 'nextWeekOpen'), snap => {
+    if (snap.exists()) {
+      const data = snap.data();
+      const ts = data.openTimestamp;
+      if (ts && Date.now() < ts) {
+        nextWeekOpenTs = ts;
+      } else {
+        nextWeekOpenTs = null;
+        }
+    } else {
+      nextWeekOpenTs = null;
+    }
+    renderAll();
+  });
+  unsubscribe = () => { unsubBookings(); unsubSettings(); };
+  // Проверяем — нужно ли сгенерировать время открытия
+  checkAndGenerateOpenTime();
+  // Тихая проверка каждые 30 сек — открылась ли следующая неделя
+  setInterval(() => {
+    if (nextWeekOpenTs && Date.now() >= nextWeekOpenTs) {
+      nextWeekOpenTs = null;
+      renderAll();
+    }
+  }, 30000);
+}
+
+async function checkAndGenerateOpenTime() {
+  const now = new Date();
+  const day = now.getDay(); // 5 = пятница
+  const totalMin = now.getHours() * 60 + now.getMinutes();
+  const genWinStart = GEN_WIN_H * 60 + GEN_WIN_M;
+  const genWinEnd   = RND_TO + 1; // до конца окна открытия
+
+  if (day !== 5) return; // только пятница
+  if (totalMin < genWinStart || totalMin > genWinEnd) return;
+
+  // Проверяем есть ли уже запись на эту пятницу
+  const fridayKey = dateKey(now);
+  const settingsDoc = await getDocOnce(doc(db, 'settings', 'nextWeekOpen'));
+  if (settingsDoc.exists()) {
+    const saved = settingsDoc.data();
+    if (saved.fridayKey === fridayKey) return; // уже сгенерировано
+  }
+
+  // Генерируем случайное время между RND_FROM и RND_TO
+  const randomMin = Math.floor(Math.random() * (RND_TO - RND_FROM + 1)) + RND_FROM;
+  const openDate = new Date(now);
+  openDate.setHours(Math.floor(randomMin / 60), randomMin % 60, 0, 0);
+
+  // Если случайное время уже прошло — открываем сразу
+  const openTs = openDate.getTime() > Date.now() ? openDate.getTime() : Date.now();
+
+  await setDoc(doc(db, 'settings', 'nextWeekOpen'), {
+    fridayKey,
+    openTimestamp: openTs,
+    openTimeStr: `${String(Math.floor(randomMin/60)).padStart(2,'0')}:${String(randomMin%60).padStart(2,'0')}`
   });
 }
 
@@ -335,6 +398,10 @@ function getWeekOffsetForDate(d) {
 // ═══════════════════════════════════
 //  РЕНДЕР
 // ═══════════════════════════════════
+function isNextWeekUnlocked() {
+  return !nextWeekOpenTs || Date.now() >= nextWeekOpenTs;
+}
+
 function renderAll() {
   renderWeekNav(); renderDaysGrid(); renderDetailPanel(); renderStats();
   renderCooldownBanner(); renderWlRequestPanel();
@@ -346,7 +413,7 @@ function renderWeekNav() {
     days[0].toLocaleDateString('ru-RU',fmt)+' – '+days[4].toLocaleDateString('ru-RU',fmt);
   document.getElementById('week-tag').textContent=['Текущая неделя','Следующая неделя'][weekOffset]||'';
   document.getElementById('btn-prev').disabled=weekOffset<=0;
-  document.getElementById('btn-next').disabled=weekOffset>=MAX_WEEK_OFFSET;
+  document.getElementById('btn-next').disabled=weekOffset>=1||!isNextWeekUnlocked();
 }
 
 function renderDaysGrid() {
@@ -605,7 +672,7 @@ function triggerNotification(email, key) {
 // ═══════════════════════════════════
 //  UI
 // ═══════════════════════════════════
-window.changeWeek=(dir)=>{const n=weekOffset+dir;if(n<0||n>MAX_WEEK_OFFSET)return;weekOffset=n;selectedDay=null;renderAll();};
+window.changeWeek=(dir)=>{const n=weekOffset+dir;if(n<0||n>1)return;if(n===1&&!isNextWeekUnlocked()){showToast('Следующая неделя ещё не открыта','warning');return;}weekOffset=n;selectedDay=null;renderAll();};
 window.switchTab=(tab,btn)=>{
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
