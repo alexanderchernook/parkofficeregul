@@ -539,6 +539,7 @@ window._leaveWl = async (key) => {
   const {slots,waitlists}=getDayData(key);
   await saveDay(key,slots,waitlists.filter(w=>w.email!==currentUser.email));
   showToast('Вы покинули очередь','info');
+  renderMyBookings(); renderStats();
 };
 
 window._cancelFromList = async (key) => {
