@@ -507,7 +507,7 @@ function renderDetailPanel() {
 function renderStats() {
   const bks=getDayData(todayKey()).bookings||[];
   document.getElementById('stat-free').textContent=SPOT_NUMBERS.length-bks.length;
-  const days=getWeekDays(0), wk=weekYear(days[0]);
+  const days=getWeekDays(weekOffset), wk=weekYear(days[0]);
   const used=bookingsThisWeek(currentUser.email,wk);
   document.getElementById('stat-week').textContent=`${used} / ${MAX_PER_WEEK}`;
   const score=priorityScore(currentUser.email);
