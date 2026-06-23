@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ParkOffice</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f5f5f5;--surface:#fff;--border:rgba(0,0,0,0.1);
+      --text:#1a1a1a;--text2:#666;
+      --blue:#185FA5;--blue-l:#E6F1FB;
+      --green:#0F6E56;--green-l:#EAF3DE;
+      --amber:#854F0B;--amber-l:#FAEEDA;
+      --red:#A32D2D;--red-l:#FCEBEB;
+      --r:10px;--rs:6px;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+    /* LOGIN */
+    #screen-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+    .login-card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:2.5rem 2rem;max-width:360px;width:100%;text-align:center}
+    .login-logo{font-size:36px;margin-bottom:.5rem}
+    .login-card h1{font-size:22px;font-weight:600;margin-bottom:6px}
+    .login-card p{font-size:14px;color:var(--text2);margin-bottom:2rem;line-height:1.6}
+    .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 16px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
+    .btn-google:hover{background:var(--bg)}
+    .btn-google svg{width:18px;height:18px;flex-shrink:0}
+
+    /* APP */
+    #screen-main{display:none}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .topbar-brand{font-size:16px;font-weight:600}
+    .topbar-user{display:flex;align-items:center;gap:10px}
+    .user-avatar{width:34px;height:34px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--blue);overflow:hidden}
+    .user-avatar img{width:100%;height:100%;object-fit:cover}
+    .user-name{font-size:14px;font-weight:500}
+    .user-email{font-size:12px;color:var(--text2)}
+    .btn-logout{font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);padding:5px 12px;border-radius:var(--rs);cursor:pointer}
+    .btn-logout:hover{background:var(--bg)}
+
+    .main-content{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
+
+    .tabs{display:flex;gap:4px;margin-bottom:1.5rem;background:#e8e8e8;padding:4px;border-radius:var(--rs)}
+    .tab-btn{flex:1;padding:8px;font-size:13px;border:none;background:none;border-radius:5px;cursor:pointer;color:var(--text2);font-weight:500}
+    .tab-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+
+    .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem}
+    .stat-card{background:#ebebeb;border-radius:var(--rs);padding:14px;text-align:center}
+    .stat-val{font-size:24px;font-weight:600}
+    .stat-lbl{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.4}
+
+    .cooldown-banner{background:var(--amber-l);border:1px solid #EF9F27;border-radius:var(--rs);padding:10px 14px;margin-bottom:1rem;font-size:13px;color:var(--amber);display:none}
+    .cooldown-banner.visible{display:block}
+
+    /* waitlist request panel */
+    .wl-request-panel{background:var(--blue-l);border:1px solid #378ADD;border-radius:var(--rs);padding:14px;margin-bottom:1rem;display:none}
+    .wl-request-panel.visible{display:block}
+    .wl-request-panel h4{font-size:14px;font-weight:600;color:#0C447C;margin-bottom:10px}
+    .wl-request-panel p{font-size:13px;color:#185FA5;margin-bottom:12px;line-height:1.5}
+    .days-picker{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+    .day-pick-btn{padding:6px 14px;border-radius:20px;border:1px solid #378ADD;background:none;color:#185FA5;font-size:13px;cursor:pointer}
+    .day-pick-btn.selected{background:#185FA5;color:#fff;border-color:#185FA5}
+    .btn-confirm-wl{padding:8px 20px;border-radius:var(--rs);border:none;background:#185FA5;color:#fff;font-size:13px;font-weight:500;cursor:pointer}
+    .btn-confirm-wl:hover{background:#0C447C}
+    .btn-confirm-wl:disabled{opacity:.5;cursor:default}
+
+    .week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+    .week-label-wrap{text-align:center}
+    .week-label-wrap span{font-size:15px;font-weight:500;display:block}
+    .week-tag{font-size:11px;color:var(--text2);margin-top:2px}
+    .btn-nav{background:var(--surface);border:1px solid var(--border);width:34px;height:34px;border-radius:var(--rs);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
+    .btn-nav:hover{background:var(--bg)}
+    .btn-nav:disabled{opacity:.3;cursor:default}
+
+    .days-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1.5rem}
+    .day-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 6px;cursor:pointer;text-align:center;transition:border-color .15s}
+    .day-card:hover:not(.locked):not(.past){border-color:#aaa}
+    .day-card.selected{border:2px solid var(--blue)}
+    .day-card.past{opacity:.35;pointer-events:none}
+    .day-card.locked{opacity:.55;cursor:not-allowed}
+    .day-name{font-size:11px;color:var(--text2);margin-bottom:4px}
+    .day-date{font-size:16px;font-weight:600;margin-bottom:8px}
+    .day-badge{font-size:10px;padding:3px 6px;border-radius:20px;display:inline-block;line-height:1.3}
+    .b-free{background:var(--green-l);color:var(--green)}
+    .b-booked{background:var(--blue-l);color:var(--blue)}
+    .b-waiting{background:var(--amber-l);color:var(--amber)}
+    .b-full{background:var(--red-l);color:var(--red)}
+    .b-locked{background:#f0f0f0;color:#999}
+
+    .detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem}
+    .detail-panel h3{font-size:15px;font-weight:600;margin-bottom:1rem}
+    .spot-row{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:7px}
+    .spot-num{font-size:13px;font-weight:600;min-width:52px}
+    .spot-user{font-size:13px;color:var(--text2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .spot-status{font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+    .s-free{background:var(--green-l);color:var(--green)}
+    .s-mine{background:var(--blue-l);color:var(--blue)}
+    .s-taken{background:#f0f0f0;color:#888}
+    .btn-book{font-size:12px;padding:5px 12px;border-radius:var(--rs);border:1px solid var(--blue);color:var(--blue);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .btn-book:hover{background:var(--blue-l)}
+    .btn-cancel{font-size:12px;padding:5px 12px;border-radius:var(--rs);border:1px solid var(--border);color:var(--text2);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .btn-cancel:hover{background:var(--bg)}
+
+    .waitlist-section{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)}
+    .waitlist-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .waitlist-header h4{font-size:13px;color:var(--text2);font-weight:500}
+    .btn-waitlist{font-size:12px;padding:5px 12px;border-radius:var(--rs);border:1px solid var(--amber);color:var(--amber);background:none;cursor:pointer}
+    .btn-waitlist:hover{background:var(--amber-l)}
+    .waitlist-item{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid var(--border)}
+    .waitlist-item:last-child{border-bottom:none}
+    .wl-left{display:flex;align-items:center;gap:8px}
+    .wl-pos{width:22px;height:22px;border-radius:50%;background:var(--amber-l);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+    .wl-score{font-size:11px;color:var(--text2);margin-left:4px}
+    .wl-days-want{font-size:11px;color:var(--blue);margin-left:4px}
+
+    .priority-info{margin-top:1rem;padding:10px 14px;background:var(--blue-l);border-radius:var(--rs);font-size:12px;color:#0C447C;line-height:1.6}
+
+    .booking-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px}
+    .booking-date{font-size:14px;font-weight:500}
+    .booking-meta{font-size:12px;color:var(--text2);margin-top:2px}
+    .section-label{font-size:13px;color:var(--text2);margin-bottom:8px;margin-top:1rem}
+    .section-label:first-child{margin-top:0}
+
+    .notify-preview{background:var(--amber-l);border:1px solid #EF9F27;border-radius:var(--rs);padding:12px 14px;margin-top:10px;font-size:13px;color:#633806;line-height:1.6}
+    .notify-preview a{color:var(--blue)}
+
+    .empty{text-align:center;padding:2.5rem;color:var(--text2);font-size:14px}
+    .empty-icon{font-size:36px;display:block;margin-bottom:10px;opacity:.4}
+
+    .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.8);display:flex;align-items:center;justify-content:center;z-index:100;font-size:14px;color:var(--text2)}
+    .loading-overlay.hidden{display:none}
+
+    /* Уведомление прижато к верху экрана */
+    .toast{
+      position:fixed;
+      top:24px;
+      left:50%;
+      transform:translateX(-50%) translateY(-80px);
+      background:#1a1a1a;
+      color:#fff;
+      padding:10px 20px;
+      border-radius:var(--rs);
+      font-size:14px;
+      transition:transform .25s;
+      z-index:999;
+      white-space:nowrap;
+      pointer-events:none
+    }
+    .toast.show{transform:translateX(-50%) translateY(0)}
+    .toast.success{background:var(--green)}
+    .toast.warning{background:var(--amber)}
+    .toast.info{background:var(--blue)}
+
+    @media(max-width:480px){.days-grid{gap:4px}.day-card{padding:8px 3px}.day-badge{display:none}}
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">⏳ Загрузка...</div>
+
+<div id="screen-login" style="display:none">
+  <div class="login-card">
+    <div class="login-logo">🅿</div>
+    <h1>ParkOffice</h1>
+    <p>Система бронирования парковочных мест.<br>Войдите через корпоративный аккаунт Google.</p>
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+      Войти через Google
+    </button>
+  </div>
+</div>
+
+<div id="screen-main" style="display:none">
+  <div class="topbar">
+    <div class="topbar-brand">🅿 ParkOffice</div>
+    <div class="topbar-user">
+      <div style="text-align:right">
+        <div class="user-name" id="user-name-display"></div>
+        <div class="user-email" id="user-email-display"></div>
+      </div>
+      <div class="user-avatar" id="user-avatar-display"></div>
+      <button class="btn-logout" onclick="doLogout()">Выйти</button>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('book',this)">📅 Забронировать</button>
+      <button class="tab-btn" onclick="switchTab('my',this)">🔖 Мои брони</button>
+    </div>
+
+    <div id="tab-book">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="stat-free">—</div><div class="stat-lbl">свободно сегодня</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-week">—</div><div class="stat-lbl">броней на этой неделе (макс 3)</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-priority">—</div><div class="stat-lbl">мой приоритет в очереди</div></div>
+      </div>
+
+      <div class="cooldown-banner" id="cooldown-banner"></div>
+
+      <div class="wl-request-panel" id="wl-request-panel">
+        <h4>📋 Запрос мест из листа ожидания</h4>
+        <p>Вы использовали лимит на этой неделе. Укажите сколько дней хотите получить — система автоматически запишет вас, как только места освободятся или останутся незанятыми.</p
