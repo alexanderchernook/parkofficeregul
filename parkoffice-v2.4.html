@@ -118,6 +118,8 @@
     .toast.info{background:var(--blue)}
     @media(max-width:480px){.days-grid{gap:4px}.day-card{padding:8px 3px}.day-badge{display:none}}
   </style>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script>emailjs.init("ubvznGk4u7DSnkuCr");</script>
 </head>
 <body>
 
@@ -290,6 +292,41 @@ function subscribeToData() {
       renderAll();
     }
   }, 30000);
+
+  // Слушаем уведомления для текущего пользователя
+  const safeEmail = currentUser.email.replace(/[.#$[\]]/g, '_');
+  onSnapshot(doc(db, 'notifications', safeEmail), snap => {
+    if (snap.exists()) {
+      const data = snap.data();
+      const msgs = data.messages || [];
+      const unread = msgs.filter(m => !m.read);
+      if (unread.length > 0) showNotificationBanner(unread);
+    }
+  });
+}
+
+function showNotificationBanner(messages) {
+  let banner = document.getElementById('notification-banner');
+  if (!banner) {
+    banner = document.createElement('div');
+    banner.id = 'notification-banner';
+    banner.style.cssText = 'position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#0F6E56;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;z-index:998;max-width:420px;width:90%;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,.2);cursor:pointer';
+    banner.onclick = () => { banner.remove(); markNotificationsRead(); };
+    document.body.appendChild(banner);
+  }
+  const texts = messages.map(m => `✅ Место №${m.spotNum} забронировано на ${m.date}`).join('<br>');
+  banner.innerHTML = texts + '<br><small style="opacity:.8;margin-top:6px;display:block">Нажмите чтобы закрыть</small>';
+  // Автозакрытие через 8 сек
+  setTimeout(() => { if (banner.parentNode) banner.remove(); }, 8000);
+}
+
+async function markNotificationsRead() {
+  const safeEmail = currentUser.email.replace(/[.#$[\]]/g, '_');
+  const ref = doc(db, 'notifications', safeEmail);
+  const snap = await getDocOnce(ref);
+  if (!snap.exists()) return;
+  const msgs = (snap.data().messages || []).map(m => ({...m, read: true}));
+  await setDoc(ref, { messages: msgs });
 }
 
 async function checkAndGenerateOpenTime() {
@@ -602,23 +639,47 @@ window._book = async (key, num) => {
 window._cancel = async (key, num) => {
   const {slots,waitlists}=getDayData(key);
   slots[num]=null;
-  // Авто-запись из листа ожидания
+
   const sorted=sortedWaitlist(waitlists);
-  let newWl=waitlists, notified=null;
+  let newWl=waitlists, notified=null, assignedSpot=null;
+
   if(sorted.length>0){
     const next=sorted[0];
     const d=new Date(key+'T00:00:00'), wo=getWeekOffsetForDate(d);
     if(!weekLimitReached(next.email,wo)){
-      slots[num]=next.email;
-      newWl=waitlists.filter(w=>w.email!==next.email);
-      notified=next.email;
+      // Ищем предпочтительное место — то на котором он чаще всего бронировал раньше
+      const preferred = getPreferredSpot(next.email, slots);
+      assignedSpot = preferred;
+      slots[preferred] = next.email;
+      newWl = waitlists.filter(w=>w.email!==next.email);
+      notified = next.email;
     }
   }
   await saveDay(key,slots,newWl);
-  if(notified) triggerNotification(notified,key);
+  if(notified) triggerNotification(notified, key, assignedSpot);
   showToast('Бронь отменена','info');
   renderDetailPanel();
 };
+
+// Возвращает предпочтительный свободный слот для пользователя:
+// 1. Место которое он чаще всего занимал в прошлом (из свободных)
+// 2. Иначе — любое свободное
+function getPreferredSpot(email, currentSlots) {
+  // Считаем историю бронирований по местам
+  const history = {};
+  SPOT_NUMBERS.forEach(n => { history[n] = 0; });
+  Object.values(dbData).forEach(dayData => {
+    const s = dayData.slots || {};
+    SPOT_NUMBERS.forEach(n => {
+      if (s[n] === email) history[n]++;
+    });
+  });
+  // Сортируем свободные места по частоте использования
+  const freeSpots = SPOT_NUMBERS.filter(n => !currentSlots[n]);
+  if (!freeSpots.length) return null;
+  freeSpots.sort((a,b) => (history[b]||0) - (history[a]||0));
+  return freeSpots[0];
+}
 
 window._joinWl = async (key) => {
   const {slots,waitlists}=getDayData(key);
@@ -675,7 +736,9 @@ window.confirmWaitlistRequest = async () => {
     // Если место свободно, очереди нет и лимит не исчерпан — сразу бронируем
     const curBooked = bookingsInWeek(currentUser.email, wk);
     if(occupied<SPOT_NUMBERS.length&&waitlists.length===0&&freeSlot&&curBooked<MAX_PER_WEEK){
-      slots[freeSlot]=currentUser.email;
+      const preferred=getPreferredSpot(currentUser.email, slots);
+      const spotToBook=preferred||freeSlot;
+      slots[spotToBook]=currentUser.email;
       await saveDay(key,slots,waitlists);
       showToast(`Автозапись: ${d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}`,'success');
     } else {
@@ -692,17 +755,35 @@ window.confirmWaitlistRequest = async () => {
 // ═══════════════════════════════════
 //  УВЕДОМЛЕНИЕ
 // ═══════════════════════════════════
-function triggerNotification(email, key) {
-  const d=new Date(key+'T00:00:00');
-  const date=d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
-  const subj=encodeURIComponent(`ParkOffice: место свободно на ${date}`);
-  const body=encodeURIComponent(`Здравствуйте!\n\nДля вас освободилось место на ${date}. Бронь подтверждена автоматически.\n\nParkOffice`);
-  const panel=document.getElementById('detail-panel');
-  const box=document.createElement('div');
-  box.className='notify-preview';
-  box.innerHTML=`<strong>📧 Место выдано из листа ожидания</strong><br><br>Получатель: ${email}<br>Дата: ${date}<br><br><a href="mailto:${email}?subject=${subj}&body=${body}">Открыть уведомление в почте →</a>`;
-  panel.appendChild(box);
-  showToast(`${shortName(email)} получил место из очереди!`,'success');
+async function triggerNotification(email, key, spotNum) {
+  const d = new Date(key + 'T00:00:00');
+  const date = d.toLocaleDateString('ru-RU', {day:'numeric', month:'long', weekday:'long'});
+
+  // 1. Отправляем письмо через EmailJS
+  try {
+    await emailjs.send("service_0tyt9qi", "template_eactl1r", {
+      to_email:    email,
+      to_name:     email.split('@')[0],
+      spot_number: spotNum,
+      date:        date,
+    });
+  } catch(e) {
+    console.error('EmailJS error:', e);
+  }
+
+  // 2. Сохраняем уведомление в Firestore — покажем баннер когда человек откроет приложение
+  try {
+    const safeEmail = email.replace(/[.#$[\]@]/g, '_');
+    const ref = doc(db, 'notifications', safeEmail);
+    const snap = await getDocOnce(ref);
+    const existing = snap.exists() ? (snap.data().messages || []) : [];
+    existing.push({ spotNum, date, key, read: false, ts: Date.now() });
+    await setDoc(ref, { messages: existing });
+  } catch(e) {
+    console.error('Notification save error:', e);
+  }
+
+  showToast(`${shortName(email)} получил место №${spotNum}`, 'success');
 }
 
 // ═══════════════════════════════════
