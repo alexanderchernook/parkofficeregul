@@ -161,12 +161,8 @@
       <div class="cooldown-banner" id="cooldown-banner"></div>
       <div class="wl-request-panel" id="wl-request-panel">
         <h4>📋 Запрос мест из листа ожидания</h4>
-        <p>Вы использовали лимит на этой неделе. Укажите сколько дней хотите получить — система автоматически запишет вас, как только места освободятся.</p>
-        <div class="days-picker">
-          <button class="day-pick-btn" data-val="1" onclick="toggleDayPick(this)">1 день</button>
-          <button class="day-pick-btn" data-val="2" onclick="toggleDayPick(this)">2 дня</button>
-          <button class="day-pick-btn" data-val="3" onclick="toggleDayPick(this)">3 дня</button>
-        </div>
+        <p>Выберите сколько дней хотите получить на этой неделе — система автоматически запишет вас, как только места освободятся.</p>
+        <div class="days-picker" id="days-picker"></div>
         <button class="btn-confirm-wl" id="btn-confirm-wl" onclick="confirmWaitlistRequest()" disabled>Встать в очередь</button>
       </div>
       <div class="week-nav">
@@ -456,13 +452,42 @@ function renderCooldownBanner() {
 
 function renderWlRequestPanel() {
   const panel=document.getElementById('wl-request-panel');
-  const limitReached=weekLimitReached(currentUser.email, weekOffset);
   const wk=weekYear(getWeekDays(weekOffset)[0]);
-  const hasRequest=Object.keys(dbData).some(k=>{
+
+  // Сколько уже забронировано на этой неделе
+  const booked = bookingsInWeek(currentUser.email, wk);
+  // Сколько уже стоит в листе ожидания на этой неделе
+  const inWaitlist = Object.keys(dbData).filter(k=>{
     const d=new Date(k+'T00:00:00');
     return weekYear(d)===wk&&(dbData[k]?.waitlists||[]).some(w=>w.email===currentUser.email);
-  });
-  panel.classList.toggle('visible', limitReached&&!hasRequest);
+  }).length;
+  // Максимум мест из WL = 5 - забронировано - уже в очереди
+  const maxWl = 5 - booked - inWaitlist;
+  const limitReached = weekLimitReached(currentUser.email, weekOffset);
+
+  // Показываем панель если лимит исчерпан и ещё есть квота на WL
+  if (!limitReached || maxWl <= 0) {
+    panel.classList.remove('visible');
+    return;
+  }
+  panel.classList.add('visible');
+
+  // Динамически рендерим кнопки выбора дней
+  const picker = document.getElementById('days-picker');
+  picker.innerHTML = '';
+  for (let i=1; i<=maxWl; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'day-pick-btn' + (wlDaysWanted===i?' selected':'');
+    btn.dataset.val = i;
+    btn.textContent = i === 1 ? '1 день' : i + ' дня';
+    btn.onclick = () => window.toggleDayPick(btn);
+    picker.appendChild(btn);
+  }
+  // Сбрасываем выбор если он превышает новый максимум
+  if (wlDaysWanted > maxWl) {
+    wlDaysWanted = 0;
+    document.getElementById('btn-confirm-wl').disabled = true;
+  }
 }
 
 function selectDay(key){selectedDay=key;renderDaysGrid();renderDetailPanel();}
@@ -628,25 +653,36 @@ window.toggleDayPick = (btn) => {
 
 window.confirmWaitlistRequest = async () => {
   if(!wlDaysWanted) return;
+  const wk = weekYear(getWeekDays(weekOffset)[0]);
+  const booked = bookingsInWeek(currentUser.email, wk);
+  const inWaitlist = Object.keys(dbData).filter(k=>{
+    const d=new Date(k+'T00:00:00');
+    return weekYear(d)===wk&&(dbData[k]?.waitlists||[]).some(w=>w.email===currentUser.email);
+  }).length;
+  const maxWl = 5 - booked - inWaitlist;
+  const actualDays = Math.min(wlDaysWanted, maxWl);
+  if (actualDays <= 0) { showToast('Нет доступных мест для очереди','warning'); return; }
+
   const days=getWeekDays(weekOffset);
   let added=0;
   for(const d of days){
-    if(isPast(d)||added>=wlDaysWanted) continue;
+    if(isPast(d)||added>=actualDays) continue;
     const key=dateKey(d), {slots,waitlists}=getDayData(key);
     if(Object.values(slots).includes(currentUser.email)) continue;
     if(waitlists.some(w=>w.email===currentUser.email)) continue;
     const occupied=Object.values(slots).filter(Boolean).length;
     const freeSlot=SPOT_NUMBERS.find(n=>!slots[n]);
-    if(occupied<SPOT_NUMBERS.length&&waitlists.length===0&&freeSlot&&!weekLimitReached(currentUser.email,weekOffset)){
+    // Если место свободно, очереди нет и лимит не исчерпан — сразу бронируем
+    const curBooked = bookingsInWeek(currentUser.email, wk);
+    if(occupied<SPOT_NUMBERS.length&&waitlists.length===0&&freeSlot&&curBooked<MAX_PER_WEEK){
       slots[freeSlot]=currentUser.email;
       await saveDay(key,slots,waitlists);
       showToast(`Автозапись: ${d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}`,'success');
     } else {
-      await saveDay(key,slots,[...waitlists,{email:currentUser.email,daysWanted:wlDaysWanted}]);
+      await saveDay(key,slots,[...waitlists,{email:currentUser.email,daysWanted:actualDays}]);
     }
     added++;
   }
-  document.getElementById('wl-request-panel').classList.remove('visible');
   wlDaysWanted=0;
   document.querySelectorAll('.day-pick-btn').forEach(b=>b.classList.remove('selected'));
   document.getElementById('btn-confirm-wl').disabled=true;
