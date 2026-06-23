@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ParkOffice</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#f5f5f5;--surface:#fff;--border:rgba(0,0,0,0.1);
+      --text:#1a1a1a;--text2:#666;
+      --blue:#185FA5;--blue-l:#E6F1FB;
+      --green:#0F6E56;--green-l:#EAF3DE;
+      --amber:#854F0B;--amber-l:#FAEEDA;
+      --red:#A32D2D;--red-l:#FCEBEB;
+      --r:10px;--rs:6px;
+    }
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+    #screen-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+    .login-card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);padding:2.5rem 2rem;max-width:360px;width:100%;text-align:center}
+    .login-logo{font-size:36px;margin-bottom:.5rem}
+    .login-card h1{font-size:22px;font-weight:600;margin-bottom:6px}
+    .login-card p{font-size:14px;color:var(--text2);margin-bottom:2rem;line-height:1.6}
+    .btn-google{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:11px 16px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);font-size:14px;font-weight:500;cursor:pointer;transition:background .15s}
+    .btn-google:hover{background:var(--bg)}
+    .btn-google svg{width:18px;height:18px;flex-shrink:0}
+    #screen-main{display:none}
+    .topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:.75rem 1.5rem;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+    .topbar-brand{font-size:16px;font-weight:600}
+    .topbar-user{display:flex;align-items:center;gap:10px}
+    .user-avatar{width:34px;height:34px;border-radius:50%;background:var(--blue-l);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:var(--blue);overflow:hidden}
+    .user-avatar img{width:100%;height:100%;object-fit:cover}
+    .user-name{font-size:14px;font-weight:500}
+    .user-email{font-size:12px;color:var(--text2)}
+    .btn-logout{font-size:13px;color:var(--text2);background:none;border:1px solid var(--border);padding:5px 12px;border-radius:var(--rs);cursor:pointer}
+    .btn-logout:hover{background:var(--bg)}
+    .main-content{max-width:720px;margin:0 auto;padding:1.5rem 1rem}
+    .tabs{display:flex;gap:4px;margin-bottom:1.5rem;background:#e8e8e8;padding:4px;border-radius:var(--rs)}
+    .tab-btn{flex:1;padding:8px;font-size:13px;border:none;background:none;border-radius:5px;cursor:pointer;color:var(--text2);font-weight:500}
+    .tab-btn.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.5rem}
+    .stat-card{background:#ebebeb;border-radius:var(--rs);padding:14px;text-align:center}
+    .stat-val{font-size:24px;font-weight:600}
+    .stat-lbl{font-size:11px;color:var(--text2);margin-top:3px;line-height:1.4}
+    .cooldown-banner{background:var(--amber-l);border:1px solid #EF9F27;border-radius:var(--rs);padding:10px 14px;margin-bottom:1rem;font-size:13px;color:var(--amber);display:none}
+    .cooldown-banner.visible{display:block}
+    .wl-request-panel{background:var(--blue-l);border:1px solid #378ADD;border-radius:var(--rs);padding:14px;margin-bottom:1rem;display:none}
+    .wl-request-panel.visible{display:block}
+    .wl-request-panel h4{font-size:14px;font-weight:600;color:#0C447C;margin-bottom:10px}
+    .wl-request-panel p{font-size:13px;color:#185FA5;margin-bottom:12px;line-height:1.5}
+    .days-picker{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+    .day-pick-btn{padding:6px 14px;border-radius:20px;border:1px solid #378ADD;background:none;color:#185FA5;font-size:13px;cursor:pointer}
+    .day-pick-btn.selected{background:#185FA5;color:#fff;border-color:#185FA5}
+    .btn-confirm-wl{padding:8px 20px;border-radius:var(--rs);border:none;background:#185FA5;color:#fff;font-size:13px;font-weight:500;cursor:pointer}
+    .btn-confirm-wl:hover{background:#0C447C}
+    .btn-confirm-wl:disabled{opacity:.5;cursor:default}
+    .week-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+    .week-label-wrap{text-align:center}
+    .week-label-wrap span{font-size:15px;font-weight:500;display:block}
+    .week-tag{font-size:11px;color:var(--text2);margin-top:2px}
+    .btn-nav{background:var(--surface);border:1px solid var(--border);width:34px;height:34px;border-radius:var(--rs);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--text2)}
+    .btn-nav:hover{background:var(--bg)}
+    .btn-nav:disabled{opacity:.3;cursor:default}
+    .days-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1.5rem}
+    .day-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 6px;cursor:pointer;text-align:center;transition:border-color .15s}
+    .day-card:hover:not(.locked):not(.past){border-color:#aaa}
+    .day-card.selected{border:2px solid var(--blue)}
+    .day-card.past{opacity:.35;pointer-events:none}
+    .day-card.locked{opacity:.55;cursor:not-allowed}
+    .day-name{font-size:11px;color:var(--text2);margin-bottom:4px}
+    .day-date{font-size:16px;font-weight:600;margin-bottom:8px}
+    .day-badge{font-size:10px;padding:3px 6px;border-radius:20px;display:inline-block;line-height:1.3}
+    .b-free{background:var(--green-l);color:var(--green)}
+    .b-booked{background:var(--blue-l);color:var(--blue)}
+    .b-waiting{background:var(--amber-l);color:var(--amber)}
+    .b-full{background:var(--red-l);color:var(--red)}
+    .b-locked{background:#f0f0f0;color:#999}
+    .detail-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem}
+    .detail-panel h3{font-size:15px;font-weight:600;margin-bottom:1rem}
+    .spot-row{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border);border-radius:var(--rs);margin-bottom:7px}
+    .spot-num{font-size:13px;font-weight:600;min-width:52px}
+    .spot-status{font-size:11px;padding:2px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+    .spot-user{font-size:13px;color:var(--text2);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .s-free{background:var(--green-l);color:var(--green)}
+    .s-mine{background:var(--blue-l);color:var(--blue)}
+    .s-taken{background:#f0f0f0;color:#888}
+    .btn-book{font-size:12px;padding:5px 12px;border-radius:var(--rs);border:1px solid var(--blue);color:var(--blue);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .btn-book:hover{background:var(--blue-l)}
+    .btn-cancel{font-size:12px;padding:5px 12px;border-radius:var(--rs);border:1px solid var(--border);color:var(--text2);background:none;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    .btn-cancel:hover{background:var(--bg)}
+    .waitlist-section{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)}
+    .waitlist-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+    .waitlist-header h4{font-size:13px;color:var(--text2);font-weight:500}
+    .btn-waitlist{font-size:12px;padding:5px 12px;border-radius:var(--rs);border:1px solid var(--amber);color:var(--amber);background:none;cursor:pointer}
+    .btn-waitlist:hover{background:var(--amber-l)}
+    .waitlist-item{display:flex;align-items:center;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid var(--border)}
+    .waitlist-item:last-child{border-bottom:none}
+    .wl-left{display:flex;align-items:center;gap:8px}
+    .wl-pos{width:22px;height:22px;border-radius:50%;background:var(--amber-l);color:var(--amber);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0}
+    .wl-score{font-size:11px;color:var(--text2);margin-left:4px}
+    .wl-days-want{font-size:11px;color:var(--blue);margin-left:4px}
+    .priority-info{margin-top:1rem;padding:10px 14px;background:var(--blue-l);border-radius:var(--rs);font-size:12px;color:#0C447C;line-height:1.6}
+    .booking-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px}
+    .booking-date{font-size:14px;font-weight:500}
+    .booking-meta{font-size:12px;color:var(--text2);margin-top:2px}
+    .section-label{font-size:13px;color:var(--text2);margin-bottom:8px;margin-top:1rem}
+    .section-label:first-child{margin-top:0}
+    .notify-preview{background:var(--amber-l);border:1px solid #EF9F27;border-radius:var(--rs);padding:12px 14px;margin-top:10px;font-size:13px;color:#633806;line-height:1.6}
+    .notify-preview a{color:var(--blue)}
+    .empty{text-align:center;padding:2.5rem;color:var(--text2);font-size:14px}
+    .empty-icon{font-size:36px;display:block;margin-bottom:10px;opacity:.4}
+    .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;z-index:100;font-size:14px;color:var(--text2)}
+    .loading-overlay.hidden{display:none}
+    .toast{position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-80px);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:var(--rs);font-size:14px;transition:transform .25s;z-index:999;white-space:nowrap;pointer-events:none}
+    .toast.show{transform:translateX(-50%) translateY(0)}
+    .toast.success{background:var(--green)}
+    .toast.warning{background:var(--amber)}
+    .toast.info{background:var(--blue)}
+    @media(max-width:480px){.days-grid{gap:4px}.day-card{padding:8px 3px}.day-badge{display:none}}
+  </style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loading">⏳ Загрузка...</div>
+
+<div id="screen-login" style="display:none">
+  <div class="login-card">
+    <div class="login-logo">🅿</div>
+    <h1>ParkOffice</h1>
+    <p>Система бронирования парковочных мест.<br>Войдите через корпоративный аккаунт Google.</p>
+    <button class="btn-google" onclick="signInWithGoogle()">
+      <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.08 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-3.59-13.46-8.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/><path fill="none" d="M0 0h48v48H0z"/></svg>
+      Войти через Google
+    </button>
+  </div>
+</div>
+
+<div id="screen-main" style="display:none">
+  <div class="topbar">
+    <div class="topbar-brand">🅿 ParkOffice</div>
+    <div class="topbar-user">
+      <div style="text-align:right">
+        <div class="user-name" id="user-name-display"></div>
+        <div class="user-email" id="user-email-display"></div>
+      </div>
+      <div class="user-avatar" id="user-avatar-display"></div>
+      <button class="btn-logout" onclick="doLogout()">Выйти</button>
+    </div>
+  </div>
+  <div class="main-content">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('book',this)">📅 Забронировать</button>
+      <button class="tab-btn" onclick="switchTab('my',this)">🔖 Мои брони</button>
+    </div>
+    <div id="tab-book">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val" id="stat-free">—</div><div class="stat-lbl">свободно сегодня</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-week">—</div><div class="stat-lbl">броней на этой неделе (макс 3)</div></div>
+        <div class="stat-card"><div class="stat-val" id="stat-priority">—</div><div class="stat-lbl">мой приоритет в очереди</div></div>
+      </div>
+      <div class="cooldown-banner" id="cooldown-banner"></div>
+      <div class="wl-request-panel" id="wl-request-panel">
+        <h4>📋 Запрос мест из листа ожидания</h4>
+        <p>Вы использовали лимит на этой неделе. Укажите сколько дней хотите получить — система автоматически запишет вас, как только места освободятся.</p>
+        <div class="days-picker">
+          <button class="day-pick-btn" data-val="1" onclick="toggleDayPick(this)">1 день</button>
+          <button class="day-pick-btn" data-val="2" onclick="toggleDayPick(this)">2 дня</button>
+          <button class="day-pick-btn" data-val="3" onclick="toggleDayPick(this)">3 дня</button>
+        </div>
+        <button class="btn-confirm-wl" id="btn-confirm-wl" onclick="confirmWaitlistRequest()" disabled>Встать в очередь</button>
+      </div>
+      <div class="week-nav">
+        <button class="btn-nav" id="btn-prev" onclick="changeWeek(-1)">‹</button>
+        <div class="week-label-wrap"><span id="week-label"></span><div class="week-tag" id="week-tag"></div></div>
+        <button class="btn-nav" id="btn-next" onclick="changeWeek(1)">›</button>
+      </div>
+      <div class="days-grid" id="days-grid"></div>
+      <div class="detail-panel" id="detail-panel">
+        <div class="empty"><span class="empty-icon">👆</span>Выберите день</div>
+      </div>
+    </div>
+    <div id="tab-my" style="display:none"><div id="my-bookings-content"></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA5xBtw_y-rUDijzNNV7yGt1Ma87_2W3ZE",
+  authDomain: "parkingofficeregul.firebaseapp.com",
+  projectId: "parkingofficeregul",
+  storageBucket: "parkingofficeregul.firebasestorage.app",
+  messagingSenderId: "191378537096",
+  appId: "1:191378537096:web:4a1e83a3f5b2451889bd3d"
+};
+
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+// ═══════════════════════════════════
+//  КОНФИГ
+// ═══════════════════════════════════
+// Места хранятся как объект: { "19": email|null, "62": email|null, ... }
+// Это исключает путаницу с индексами массива
+const SPOT_NUMBERS    = [19, 62, 63, 78, 91];
+const MAX_PER_WEEK    = 3;
+const MAX_WEEK_OFFSET = 1;
+const PRIORITY_WEEKS  = 4;
+
+// ═══════════════════════════════════
+//  СОСТОЯНИЕ
+// ═══════════════════════════════════
+let currentUser  = null;
+let weekOffset   = 0;
+let selectedDay  = null;
+let dbData       = {};
+let wlDaysWanted = 0;
+let unsubscribe  = null;
+
+// ═══════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════
+window.signInWithGoogle = async () => {
+  try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+  catch(e) { showToast('Ошибка входа: ' + e.message, 'warning'); }
+};
+window.doLogout = async () => {
+  if (unsubscribe) unsubscribe();
+  await signOut(auth);
+};
+onAuthStateChanged(auth, user => {
+  if (user) {
+    currentUser = { email: user.email, name: user.displayName, picture: user.photoURL };
+    document.getElementById('user-name-display').textContent  = currentUser.name;
+    document.getElementById('user-email-display').textContent = currentUser.email;
+    const av = document.getElementById('user-avatar-display');
+    av.innerHTML = currentUser.picture ? `<img src="${currentUser.picture}" alt="">` : initials(currentUser.name);
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('screen-login').style.display = 'none';
+    document.getElementById('screen-main').style.display  = 'block';
+    subscribeToData();
+  } else {
+    currentUser = null; weekOffset = 0; selectedDay = null; dbData = {};
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('screen-login').style.display = '';
+    document.getElementById('screen-main').style.display  = 'none';
+  }
+});
+
+// ═══════════════════════════════════
+//  FIRESTORE
+// ═══════════════════════════════════
+function subscribeToData() {
+  unsubscribe = onSnapshot(collection(db, 'bookings'), snap => {
+    dbData = {};
+    snap.forEach(d => { dbData[d.id] = d.data(); });
+    renderAll();
+  });
+}
+
+// Структура документа:
+// slots: { "19": "email@...", "62": null, ... }  — null = свободно
+// waitlists: [ { email, daysWanted }, ... ]
+function getDayData(key) {
+  const d = dbData[key] || {};
+  const slots = {};
+  SPOT_NUMBERS.forEach(n => { slots[n] = d.slots?.[n] ?? null; });
+  return { slots, waitlists: d.waitlists || [] };
+}
+
+async function saveDay(key, slots, waitlists) {
+  await setDoc(doc(db, 'bookings', key), { slots, waitlists });
+}
+
+// ═══════════════════════════════════
+//  УТИЛИТЫ
+// ═══════════════════════════════════
+function dateKey(d) { return d.toISOString().slice(0,10); }
+function todayKey() { return dateKey(new Date()); }
+function isPast(d) {
+  const t=new Date(); t.setHours(0,0,0,0);
+  const dd=new Date(d); dd.setHours(0,0,0,0);
+  return dd<t;
+}
+function getWeekDays(offset) {
+  const today=new Date(), dow=today.getDay();
+  const mon=new Date(today);
+  mon.setDate(today.getDate()-(dow===0?6:dow-1)+offset*7);
+  return Array.from({length:5},(_,i)=>{const d=new Date(mon);d.setDate(mon.getDate()+i);return d;});
+}
+function isoWeek(d) {
+  const t=new Date(d); t.setHours(0,0,0,0);
+  t.setDate(t.getDate()+4-(t.getDay()||7));
+  const y=new Date(t.getFullYear(),0,1);
+  return Math.ceil((((t-y)/86400000)+1)/7);
+}
+function weekYear(d) { return `${d.getFullYear()}-W${String(isoWeek(d)).padStart(2,'0')}`; }
+function initials(name) { return (name||'').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
+function shortName(email) { return email.split('@')[0]; }
+
+// ═══════════════════════════════════
+//  ЛИМИТЫ И ПРИОРИТЕТ
+// ═══════════════════════════════════
+function bookingsInWeek(email, wk) {
+  return Object.keys(dbData).filter(k => {
+    const d=new Date(k+'T00:00:00');
+    const data=dbData[k];
+    return weekYear(d)===wk && data?.slots && Object.values(data.slots).includes(email);
+  }).length;
+}
+function weekLimitReached(email, offset) {
+  return bookingsInWeek(email, weekYear(getWeekDays(offset)[0])) >= MAX_PER_WEEK;
+}
+function priorityScore(email) {
+  let c=0;
+  for(let w=0;w<PRIORITY_WEEKS;w++) c+=bookingsInWeek(email, weekYear(getWeekDays(-w)[0]));
+  return c;
+}
+function sortedWaitlist(wl) {
+  return [...wl].sort((a,b)=>priorityScore(a.email)-priorityScore(b.email));
+}
+function getWeekOffsetForDate(d) {
+  const d1=getWeekDays(1);
+  return dateKey(d)>=dateKey(d1[0])&&dateKey(d)<=dateKey(d1[4])?1:0;
+}
+
+// ═══════════════════════════════════
+//  РЕНДЕР
+// ═══════════════════════════════════
+function renderAll() {
+  renderWeekNav(); renderDaysGrid(); renderDetailPanel(); renderStats();
+  renderCooldownBanner(); renderWlRequestPanel();
+}
+
+function renderWeekNav() {
+  const days=getWeekDays(weekOffset), fmt={day:'numeric',month:'long'};
+  document.getElementById('week-label').textContent=
+    days[0].toLocaleDateString('ru-RU',fmt)+' – '+days[4].toLocaleDateString('ru-RU',fmt);
+  document.getElementById('week-tag').textContent=['Текущая неделя','Следующая неделя'][weekOffset]||'';
+  document.getElementById('btn-prev').disabled=weekOffset<=0;
+  document.getElementById('btn-next').disabled=weekOffset>=MAX_WEEK_OFFSET;
+}
+
+function renderDaysGrid() {
+  const days=getWeekDays(weekOffset), names=['Пн','Вт','Ср','Чт','Пт'];
+  const grid=document.getElementById('days-grid'); grid.innerHTML='';
+  const limitReached=weekLimitReached(currentUser.email, weekOffset);
+
+  days.forEach((d,i)=>{
+    const key=dateKey(d), {slots,waitlists}=getDayData(key);
+    const occupied=Object.values(slots).filter(Boolean).length;
+    const free=SPOT_NUMBERS.length-occupied;
+    const isMine=Object.values(slots).includes(currentUser.email);
+    const isWaiting=waitlists.some(w=>w.email===currentUser.email);
+    const past=isPast(d), locked=!isMine&&!isWaiting&&limitReached&&free>0;
+
+    let label,cls;
+    if(isMine)        {label='✓ моё';     cls='b-booked';}
+    else if(isWaiting){label='⏳ очередь';cls='b-waiting';}
+    else if(locked)   {label='⛔ лимит';  cls='b-locked';}
+    else if(free>0)   {label=`${free} св.`;cls='b-free';}
+    else              {label='нет мест';  cls='b-full';}
+
+    const card=document.createElement('div');
+    card.className='day-card'+(past?' past':'')+(locked&&!past?' locked':'')+(selectedDay===key?' selected':'');
+    card.innerHTML=`<div class="day-name">${names[i]}</div><div class="day-date">${d.getDate()}</div><span class="day-badge ${cls}">${label}</span>`;
+    if(!past&&!locked) card.onclick=()=>selectDay(key);
+    grid.appendChild(card);
+  });
+}
+
+function renderCooldownBanner() {
+  const banner=document.getElementById('cooldown-banner');
+  const limitReached=weekLimitReached(currentUser.email, weekOffset);
+  if(limitReached){
+    const used=bookingsInWeek(currentUser.email, weekYear(getWeekDays(weekOffset)[0]));
+    banner.textContent=`⛔ Использовано ${used} из ${MAX_PER_WEEK} броней на этой неделе. Встаньте в лист ожидания ниже.`;
+    banner.classList.add('visible');
+  } else { banner.classList.remove('visible'); }
+}
+
+function renderWlRequestPanel() {
+  const panel=document.getElementById('wl-request-panel');
+  const limitReached=weekLimitReached(currentUser.email, weekOffset);
+  const wk=weekYear(getWeekDays(weekOffset)[0]);
+  const hasRequest=Object.keys(dbData).some(k=>{
+    const d=new Date(k+'T00:00:00');
+    return weekYear(d)===wk&&(dbData[k]?.waitlists||[]).some(w=>w.email===currentUser.email);
+  });
+  panel.classList.toggle('visible', limitReached&&!hasRequest);
+}
+
+function selectDay(key){selectedDay=key;renderDaysGrid();renderDetailPanel();}
+
+function renderDetailPanel() {
+  const panel=document.getElementById('detail-panel');
+  if(!selectedDay){panel.innerHTML='<div class="empty"><span class="empty-icon">👆</span>Выберите день</div>';return;}
+
+  const key=selectedDay, {slots,waitlists}=getDayData(key);
+  const d=new Date(key+'T00:00:00');
+  const title=d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+  const limitReached=weekLimitReached(currentUser.email, weekOffset);
+  const isMine=Object.values(slots).includes(currentUser.email);
+  const occupied=Object.values(slots).filter(Boolean).length;
+  const isFull=occupied>=SPOT_NUMBERS.length;
+  const isWaiting=waitlists.some(w=>w.email===currentUser.email);
+
+  // Места — каждый слот по конкретному номеру
+  let spotsHTML='';
+  SPOT_NUMBERS.forEach(num=>{
+    const occupant=slots[num];
+    let statusHTML,actionHTML='';
+    if(occupant){
+      if(occupant===currentUser.email){
+        statusHTML=`<span class="spot-status s-mine">моё</span>`;
+        actionHTML=`<button class="btn-cancel" onclick="window._cancel('${key}',${num})">Отменить</button>`;
+      } else {
+        statusHTML=`<span class="spot-status s-taken">${shortName(occupant)}</span>`;
+      }
+    } else {
+      statusHTML=`<span class="spot-status s-free">свободно</span>`;
+      if(!isMine&&!limitReached)
+        actionHTML=`<button class="btn-book" onclick="window._book('${key}',${num})">Забронировать</button>`;
+    }
+    spotsHTML+=`<div class="spot-row"><div class="spot-num">🚗 №${num}</div><div class="spot-user"></div>${statusHTML}${actionHTML}</div>`;
+  });
+
+  // Лист ожидания
+  let wlHTML='';
+  if(isFull||waitlists.length>0){
+    const sorted=sortedWaitlist(waitlists);
+    const canJoin=isFull&&!isMine&&!isWaiting;
+    const joinBtn=canJoin?`<button class="btn-waitlist" onclick="window._joinWl('${key}')">+ В очередь</button>`:'';
+    const items=sorted.map((w,i)=>{
+      const isMe=w.email===currentUser.email;
+      const leaveBtn=isMe?`<button class="btn-cancel" onclick="window._leaveWl('${key}')">Покинуть</button>`:'';
+      const daysTag=w.daysWanted?`<span class="wl-days-want">хочет ${w.daysWanted} дн.</span>`:'';
+      return `<div class="waitlist-item"><div class="wl-left"><div class="wl-pos">${i+1}</div><span>${isMe?'Вы':shortName(w.email)}</span><span class="wl-score">(${priorityScore(w.email)} бр.)</span>${daysTag}</div>${leaveBtn}</div>`;
+    }).join('');
+    wlHTML=`<div class="waitlist-section"><div class="waitlist-header"><h4>Лист ожидания (${sorted.length})</h4>${joinBtn}</div>${items||'<div style="font-size:13px;color:#999">Очередь пуста</div>'}<div class="priority-info">ℹ️ Приоритет: меньше броней за 4 недели = выше в очереди.</div></div>`;
+  }
+
+  panel.innerHTML=`<h3>${title.charAt(0).toUpperCase()+title.slice(1)}</h3>${spotsHTML}${wlHTML}`;
+}
+
+function renderStats() {
+  const {slots}=getDayData(todayKey());
+  document.getElementById('stat-free').textContent=SPOT_NUMBERS.length-Object.values(slots).filter(Boolean).length;
+  const used=bookingsInWeek(currentUser.email, weekYear(getWeekDays(0)[0]));
+  document.getElementById('stat-week').textContent=`${used} / ${MAX_PER_WEEK}`;
+  const score=priorityScore(currentUser.email);
+  const allEmails=new Set();
+  Object.values(dbData).forEach(d=>(d.waitlists||[]).forEach(w=>allEmails.add(w.email)));
+  const better=[...allEmails].filter(e=>e!==currentUser.email&&priorityScore(e)<score).length;
+  document.getElementById('stat-priority').textContent=better===0?'🏆 лучший':`#${better+1}`;
+}
+
+function renderMyBookings() {
+  const div=document.getElementById('my-bookings-content');
+  const myKeys=Object.keys(dbData).filter(k=>Object.values(dbData[k]?.slots||{}).includes(currentUser.email)).sort();
+  const myWait=Object.keys(dbData).filter(k=>(dbData[k]?.waitlists||[]).some(w=>w.email===currentUser.email)).sort();
+
+  if(!myKeys.length&&!myWait.length){div.innerHTML='<div class="empty"><span class="empty-icon">📭</span>Нет активных броней</div>';return;}
+  let html='';
+  if(myKeys.length){
+    html+='<div class="section-label">Подтверждённые брони</div>';
+    myKeys.forEach(k=>{
+      const d=new Date(k+'T00:00:00');
+      const date=d.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'long'});
+      const slots=dbData[k]?.slots||{};
+      const num=Object.keys(slots).find(n=>slots[n]===currentUser.email)||'?';
+      html+=`<div class="booking-item"><div><div class="booking-date">${date}</div><div class="booking-meta">🚗 Место №${num}</div></div><button class="btn-cancel" onclick="window._cancelFromList('${k}')">Отменить</button></div>`;
+    });
+  }
+  if(myWait.length){
+    html+='<div class="section-label" style="margin-top:1.25rem">Лист ожидания</div>';
+    myWait.forEach(k=>{
+      const d=new Date(k+'T00:00:00');
+      const date=d.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'long'});
+      const sorted=sortedWaitlist(dbData[k]?.waitlists||[]);
+      const pos=sorted.findIndex(w=>w.email===currentUser.email);
+      const entry=sorted[pos];
+      html+=`<div class="booking-item"><div><div class="booking-date">${date}</div><div class="booking-meta" style="color:var(--amber)">⏳ Позиция: ${pos+1}${entry?.daysWanted?' · хочет '+entry.daysWanted+' дн.':''}</div></div><button class="btn-cancel" onclick="window._leaveWl('${k}')">Покинуть</button></div>`;
+    });
+  }
+  div.innerHTML=html;
+}
+
+// ═══════════════════════════════════
+//  ДЕЙСТВИЯ
+// ═══════════════════════════════════
+window._book = async (key, num) => {
+  const {slots,waitlists}=getDayData(key);
+  if(Object.values(slots).includes(currentUser.email)){showToast('Вы уже забронировали на этот день','warning');return;}
+  if(weekLimitReached(currentUser.email,weekOffset)){showToast('Лимит 3 дня в неделю достигнут','warning');return;}
+  if(slots[num]){showToast('Место уже занято','warning');return;}
+  slots[num]=currentUser.email;
+  await saveDay(key,slots,waitlists);
+  showToast(`Место №${num} забронировано!`,'success');
+};
+
+window._cancel = async (key, num) => {
+  const {slots,waitlists}=getDayData(key);
+  slots[num]=null;
+  // Авто-запись из листа ожидания
+  const sorted=sortedWaitlist(waitlists);
+  let newWl=waitlists, notified=null;
+  if(sorted.length>0){
+    const next=sorted[0];
+    const d=new Date(key+'T00:00:00'), wo=getWeekOffsetForDate(d);
+    if(!weekLimitReached(next.email,wo)){
+      slots[num]=next.email;
+      newWl=waitlists.filter(w=>w.email!==next.email);
+      notified=next.email;
+    }
+  }
+  await saveDay(key,slots,newWl);
+  if(notified) triggerNotification(notified,key);
+  showToast('Бронь отменена','info');
+  renderDetailPanel();
+};
+
+window._joinWl = async (key) => {
+  const {slots,waitlists}=getDayData(key);
+  if(waitlists.some(w=>w.email===currentUser.email)){showToast('Вы уже в очереди','warning');return;}
+  await saveDay(key,slots,[...waitlists,{email:currentUser.email,daysWanted:0}]);
+  showToast('Добавлены в лист ожидания','info');
+};
+
+window._leaveWl = async (key) => {
+  const {slots,waitlists}=getDayData(key);
+  await saveDay(key,slots,waitlists.filter(w=>w.email!==currentUser.email));
+  showToast('Вы покинули очередь','info');
+};
+
+window._cancelFromList = async (key) => {
+  const {slots,waitlists}=getDayData(key);
+  const num=Object.keys(slots).find(n=>slots[n]===currentUser.email);
+  if(num) await window._cancel(key, parseInt(num));
+  renderMyBookings(); renderStats();
+};
+
+// ═══════════════════════════════════
+//  ЗАПРОС ИЗ WL ПО КОЛ-ВУ ДНЕЙ
+// ═══════════════════════════════════
+window.toggleDayPick = (btn) => {
+  document.querySelectorAll('.day-pick-btn').forEach(b=>b.classList.remove('selected'));
+  btn.classList.add('selected');
+  wlDaysWanted=parseInt(btn.dataset.val);
+  document.getElementById('btn-confirm-wl').disabled=false;
+};
+
+window.confirmWaitlistRequest = async () => {
+  if(!wlDaysWanted) return;
+  const days=getWeekDays(weekOffset);
+  let added=0;
+  for(const d of days){
+    if(isPast(d)||added>=wlDaysWanted) continue;
+    const key=dateKey(d), {slots,waitlists}=getDayData(key);
+    if(Object.values(slots).includes(currentUser.email)) continue;
+    if(waitlists.some(w=>w.email===currentUser.email)) continue;
+    const occupied=Object.values(slots).filter(Boolean).length;
+    const freeSlot=SPOT_NUMBERS.find(n=>!slots[n]);
+    if(occupied<SPOT_NUMBERS.length&&waitlists.length===0&&freeSlot&&!weekLimitReached(currentUser.email,weekOffset)){
+      slots[freeSlot]=currentUser.email;
+      await saveDay(key,slots,waitlists);
+      showToast(`Автозапись: ${d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}`,'success');
+    } else {
+      await saveDay(key,slots,[...waitlists,{email:currentUser.email,daysWanted:wlDaysWanted}]);
+    }
+    added++;
+  }
+  document.getElementById('wl-request-panel').classList.remove('visible');
+  wlDaysWanted=0;
+  document.querySelectorAll('.day-pick-btn').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('btn-confirm-wl').disabled=true;
+  showToast(`Запрос на ${added} дн. отправлен`,'info');
+};
+
+// ═══════════════════════════════════
+//  УВЕДОМЛЕНИЕ
+// ═══════════════════════════════════
+function triggerNotification(email, key) {
+  const d=new Date(key+'T00:00:00');
+  const date=d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+  const subj=encodeURIComponent(`ParkOffice: место свободно на ${date}`);
+  const body=encodeURIComponent(`Здравствуйте!\n\nДля вас освободилось место на ${date}. Бронь подтверждена автоматически.\n\nParkOffice`);
+  const panel=document.getElementById('detail-panel');
+  const box=document.createElement('div');
+  box.className='notify-preview';
+  box.innerHTML=`<strong>📧 Место выдано из листа ожидания</strong><br><br>Получатель: ${email}<br>Дата: ${date}<br><br><a href="mailto:${email}?subject=${subj}&body=${body}">Открыть уведомление в почте →</a>`;
+  panel.appendChild(box);
+  showToast(`${shortName(email)} получил место из очереди!`,'success');
+}
+
+// ═══════════════════════════════════
+//  UI
+// ═══════════════════════════════════
+window.changeWeek=(dir)=>{const n=weekOffset+dir;if(n<0||n>MAX_WEEK_OFFSET)return;weekOffset=n;selectedDay=null;renderAll();};
+window.switchTab=(tab,btn)=>{
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-book').style.display=tab==='book'?'block':'none';
+  document.getElementById('tab-my').style.display  =tab==='my'  ?'block':'none';
+  if(tab==='my') renderMyBookings();
+};
+let toastTimer;
+window.showToast=(msg,type)=>{
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.className='toast '+(type||'');t.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3000);
+};
+</script>
+</body>
+</html>
